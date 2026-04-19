@@ -1,4 +1,4 @@
-BUILDDIR:=$(shell pwd)       # 当前工作目录
+BUILDDIR:=$(CURDIR)       # 当前工作目录 (使用 Make 内置变量,避免 shell 调用)
 
 BUILDROOT=$(BUILDDIR)/buildroot  # Buildroot 子模块目录
 BUILDROOT_EXTERNAL=$(BUILDDIR)/buildroot-external  # 外部配置层
