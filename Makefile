@@ -1,7 +1,7 @@
-BUILDDIR:=$(CURDIR)       # 当前工作目录 (使用 Make 内置变量,避免 shell 调用)
-
-BUILDROOT=$(BUILDDIR)/buildroot  # Buildroot 子模块目录
-BUILDROOT_EXTERNAL=$(BUILDDIR)/buildroot-external  # 外部配置层
+# 获取当前工作目录 - 使用多种方法确保在 Docker 环境中正常工作
+BUILDDIR?=$(or $(CURDIR),$(shell pwd),/build)
+BUILDROOT:=$(BUILDDIR)/buildroot
+BUILDROOT_EXTERNAL:=$(BUILDDIR)/buildroot-external
 DEFCONFIG_DIR = $(BUILDROOT_EXTERNAL)/configs   # 配置文件目录
 
 
