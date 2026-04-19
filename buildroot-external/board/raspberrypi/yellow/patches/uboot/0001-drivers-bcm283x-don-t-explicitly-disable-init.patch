@@ -1,0 +1,48 @@
+From c3b3682d6314eee9b7d42926f96e1559b8bb91dd Mon Sep 17 00:00:00 2001
+From: Stefan Agner <stefan@agner.ch>
+Date: Thu, 14 Apr 2022 12:15:26 +0200
+Subject: [PATCH] drivers: bcm283x: don't explicitly disable init
+
+It seems that the reason why init doesn't succeed is the lack of clock
+support in U-Boot. Setting the default clock of 48MHz for the PL011
+UARTs makes reinitialization work consistently.
+
+Note that for the first UART the "skip-init" is anyways set in the
+device tree. This will only affect probing of UARTs not enabled by
+firmware.
+
+Signed-off-by: Stefan Agner <stefan@agner.ch>
+---
+ drivers/serial/serial_bcm283x_pl011.c | 6 ------
+ include/configs/rpi.h                 | 3 +++
+ 2 files changed, 3 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/serial/serial_bcm283x_pl011.c b/drivers/serial/serial_bcm283x_pl011.c
+index 2abc1c4658f..cfafa5fed91 100644
+--- a/drivers/serial/serial_bcm283x_pl011.c
++++ b/drivers/serial/serial_bcm283x_pl011.c
+@@ -50,12 +50,6 @@ static int bcm283x_pl011_serial_probe(struct udevice *dev)
+ 	if (ret)
+ 		return ret;
+ 
+-	/*
+-	 * TODO: Reinitialization doesn't always work for now, just skip
+-	 *       init always - we know we're already initialized
+-	 */
+-	plat->skip_init = true;
+-
+ 	return pl01x_serial_probe(dev);
+ }
+ 
+diff --git a/include/configs/rpi.h b/include/configs/rpi.h
+index 8e56bdc84a8..c137bd7e19a 100644
+--- a/include/configs/rpi.h
++++ b/include/configs/rpi.h
+@@ -31,4 +31,7 @@
+  */
+ #define CFG_SYS_SDRAM_SIZE		SZ_128M
+ 
++/* PL011 Serial Configuration */
++#define CFG_PL011_CLOCK		48000000
++
+ #endif

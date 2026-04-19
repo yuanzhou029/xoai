@@ -1,0 +1,8 @@
+{
+    "log-driver": "journald",
+    "log-opts": {
+        "tag": "{{.Name}}"
+    },
+    "data-root": "/mnt/data/docker",
+    "bip": "172.30.232.1/23"
+}

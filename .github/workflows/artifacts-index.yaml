@@ -1,0 +1,102 @@
+name: Update artifacts index
+
+on:
+  # Manual run for specified version
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version of HAOS to build index for
+        required: true
+        type: string
+
+  # Called by other workflows (e.g. build.yaml)
+  workflow_call:
+    inputs:
+      version:
+        description: Version of HAOS to build index for
+        required: true
+        type: string
+    secrets:
+      R2_OS_ARTIFACTS_ID:
+        required: true
+      R2_OS_ARTIFACTS_KEY:
+        required: true
+      R2_OS_ARTIFACTS_BUCKET:
+        required: true
+      R2_OS_ARTIFACTS_ENDPOINT:
+        required: true
+      CF_ZONE:
+        required: true
+      CF_PURGE_TOKEN:
+        required: true
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  build-index:
+    name: Build Home Assistant OS artifacts index
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Python version ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install AWS CLI
+        run: pip install 'awscli<1.37.0'
+
+      - name: Create build index
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_OS_ARTIFACTS_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_OS_ARTIFACTS_KEY }}
+        run: |
+          aws s3api list-objects-v2 \
+            --bucket "${{ secrets.R2_OS_ARTIFACTS_BUCKET }}" \
+            --endpoint-url "${{ secrets.R2_OS_ARTIFACTS_ENDPOINT }}" \
+            --prefix "${{ inputs.version }}/" \
+            --query 'Contents[].Key' | jq 'map(split("/")[1]) | sort' > "${{ inputs.version }}.json"
+          aws s3 cp \
+            "${{ inputs.version }}.json" \
+            s3://${{ secrets.R2_OS_ARTIFACTS_BUCKET }}/indexes/ \
+            --endpoint-url "${{ secrets.R2_OS_ARTIFACTS_ENDPOINT }}"
+
+      - name: Regenerate artifacts index
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_OS_ARTIFACTS_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_OS_ARTIFACTS_KEY }}
+        run: |
+          aws s3api list-objects-v2 \
+            --bucket "${{ secrets.R2_OS_ARTIFACTS_BUCKET }}" \
+            --endpoint-url "${{ secrets.R2_OS_ARTIFACTS_ENDPOINT }}" \
+            --prefix "indexes/" \
+            --query 'Contents[].Key' | jq 'map(capture("indexes/(?<version>[[:digit:]].+).json").version) | sort' > .os-artifacts/index.json
+          aws s3 sync \
+            .os-artifacts/ \
+            s3://${{ secrets.R2_OS_ARTIFACTS_BUCKET }}/ \
+            --endpoint-url "${{ secrets.R2_OS_ARTIFACTS_ENDPOINT }}" \
+
+      - name: Flush CloudFlare cache
+        run: |
+          # Create purge list of all artifacts
+          jq -r '. | map("https://os-artifacts.home-assistant.io/${{ inputs.version }}/" + .) | join("\n")' < "${{ inputs.version }}.json" > purge_list
+          # Add indexes to purge list too
+          echo "https://os-artifacts.home-assistant.io/indexes/${{ inputs.version }}.json" >> purge_list
+          echo "https://os-artifacts.home-assistant.io/index.html" >> purge_list
+          echo "https://os-artifacts.home-assistant.io/index.json" >> purge_list
+          # Split to chunks of 30 files (limit of CF API)
+          split -d -l30 purge_list purge_list_chunked
+          # Convert chunked lists to JSON arrays and call CF purge API
+          for f in purge_list_chunked*; do
+            files=$(jq -R -s 'split("\n")[:-1]' < "$f")
+            curl --silent --show-error --fail -X POST \
+              "https://api.cloudflare.com/client/v4/zones/${{ secrets.CF_ZONE }}/purge_cache" \
+              -H "Authorization: Bearer ${{ secrets.CF_PURGE_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              --data "{\"files\": ${files}}"
+          done
