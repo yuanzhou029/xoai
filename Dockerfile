@@ -55,6 +55,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Init entry
 COPY scripts/entry.sh /usr/sbin/
+RUN chmod +x /usr/sbin/entry.sh
 ENTRYPOINT ["/usr/sbin/entry.sh"]
 
 # Get buildroot
