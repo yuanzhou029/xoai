@@ -2,7 +2,7 @@
 BUILDDIR?=$(or $(CURDIR),$(shell pwd),/build)
 BUILDROOT:=$(BUILDDIR)/buildroot
 BUILDROOT_EXTERNAL:=$(BUILDDIR)/buildroot-external
-DEFCONFIG_DIR = $(BUILDROOT_EXTERNAL)/configs   # 配置文件目录
+DEFCONFIG_DIR := $(BUILDROOT_EXTERNAL)/configs
 
 
 # 目录结构：
